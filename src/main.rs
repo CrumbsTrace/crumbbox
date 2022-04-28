@@ -1,19 +1,24 @@
-use crumbbox::startup::app;
+use crumbbox::{
+    configuration::Settings,
+    startup::app,
+    telemetry::{get_subscriber, init_subscriber},
+};
 use std::net::{SocketAddr, TcpListener};
-use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    let config = Settings::get_configuration().expect("Failed to load configuration");
 
-    let listener = TcpListener::bind("127.0.0.1:3000".parse::<SocketAddr>().unwrap()).unwrap();
+    let subscriber = get_subscriber("info".to_string(), std::io::stdout);
+    init_subscriber(subscriber);
 
-    tracing::debug!("Listening on {}", listener.local_addr().unwrap());
+    let address = format!("{}:{}", config.application.host, config.application.port)
+        .parse::<SocketAddr>()
+        .expect("Failed to parse address");
+
+    let listener = TcpListener::bind(address).unwrap();
+
+    tracing::info!("Listening on {}", listener.local_addr().unwrap());
 
     app(listener).await;
 }
