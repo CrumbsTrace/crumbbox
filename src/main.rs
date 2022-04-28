@@ -15,5 +15,5 @@ async fn main() {
 
     tracing::debug!("Listening on {}", listener.local_addr().unwrap());
 
-    let _app = app(listener).await;
+    app(listener).await;
 }
