@@ -20,6 +20,7 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 
 pub struct TestApp {
     pub address: SocketAddr,
+    pub storage_path: String,
 }
 
 impl TestApp {
@@ -34,6 +35,7 @@ pub async fn spawn_app() -> TestApp {
     let config = {
         let mut config = Settings::get_configuration().expect("Failed to get configuration");
         config.application.port = 0;
+        config.application.storage_path = ".crumbbox/test/".to_string();
         config
     };
 
@@ -45,7 +47,10 @@ pub async fn spawn_app() -> TestApp {
     .unwrap();
     let address = listener.local_addr().unwrap();
 
-    let _ = tokio::spawn(app(listener));
+    let _ = tokio::spawn(app(listener, config.application.storage_path.clone()));
 
-    TestApp { address }
+    TestApp {
+        address,
+        storage_path: config.application.storage_path,
+    }
 }

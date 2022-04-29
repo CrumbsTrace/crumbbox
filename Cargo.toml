@@ -11,8 +11,10 @@ path = "src/main.rs"
 name = "crumbbox"
 
 [dependencies]
-axum = "0.5"
+axum = { version = "0.5", features = ["multipart"] }
+futures = "0.3"
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 mime = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -21,8 +23,9 @@ tower-http = { version = "0.3", features = ["trace"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 hyper = { version = "0.14", features = ["full"] }
-reqwest = "0.11"
+reqwest = { version = "0.11", features = ["multipart"] }
 config = "0.13"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }

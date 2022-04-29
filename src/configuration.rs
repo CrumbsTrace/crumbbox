@@ -10,6 +10,7 @@ pub struct Settings {
 pub struct ApplicationSettings {
     pub port: u16,
     pub host: String,
+    pub storage_path: String,
 }
 
 impl Settings {

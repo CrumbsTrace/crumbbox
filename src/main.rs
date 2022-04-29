@@ -20,5 +20,5 @@ async fn main() {
 
     tracing::info!("Listening on {}", listener.local_addr().unwrap());
 
-    app(listener).await;
+    app(listener, config.application.storage_path).await;
 }
