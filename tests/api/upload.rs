@@ -217,6 +217,38 @@ async fn support_passing_a_file_path_to_use() {
     std::fs::remove_file(final_path).unwrap();
 }
 
+#[tokio::test]
+async fn uploading_several_files_where_one_failed_stops_upload_of_all_files() {
+    let app = spawn_app().await;
+    let contents = get_file_contents("tests/fixtures/test.txt");
+    let contents2 = get_file_contents("tests/fixtures/test.txt");
+    let file_name = Uuid::new_v4().to_string();
+    let file_name2 = "あ".repeat(128);
+    let part = Part::bytes(contents).file_name(file_name.clone());
+    let part2 = Part::bytes(contents2).file_name(file_name2.clone());
+    let relative_path = "directed_path_folder/";
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&format!("{}/upload", app.addr()))
+        .multipart(
+            Form::new()
+                .text("relative_path", relative_path)
+                .part("file", part)
+                .part("file", part2),
+        )
+        .send()
+        .await
+        .expect("Failed to execute request");
+
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let final_path = format!("{}/{}/{}", app.storage_path, relative_path, file_name);
+    let final_path2 = format!("{}/{}/{}", app.storage_path, relative_path, file_name2);
+
+    assert!(!std::path::Path::new(&final_path).exists());
+    assert!(!std::path::Path::new(&final_path2).exists());
+}
+
 fn get_file_contents(file_path: &str) -> Vec<u8> {
     let file = File::open(file_path).unwrap();
     let mut buf_reader = BufReader::new(file);

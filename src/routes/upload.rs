@@ -28,15 +28,43 @@ impl IntoResponse for UploadError {
             UploadError::ValidationError(_) => StatusCode::BAD_REQUEST,
         };
 
-        tracing::error!("{}", self);
         (status, self.to_string()).into_response()
     }
 }
 
-#[tracing::instrument(name = "Upload multipart form", skip(multipart, storage_details))]
+#[tracing::instrument(
+    name = "Upload multipart form request handler",
+    skip(multipart, storage_details)
+)]
 pub async fn upload(
+    multipart: Multipart,
+    storage_details: Extension<Arc<StorageDetails>>,
+) -> Result<(), UploadError> {
+    let mut uploaded_file_paths = vec![];
+    match handle_upload_process(multipart, storage_details, &mut uploaded_file_paths).await {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            match &e {
+                UploadError::ValidationError(e) => tracing::warn!("{}", e),
+                UploadError::UnexpectedError(e) => tracing::error!("{:?}", e),
+            }
+
+            cleanup_failed_files(&uploaded_file_paths)
+                .await
+                .context("Cleanup failed")?;
+            Err(e)
+        }
+    }
+}
+
+#[tracing::instrument(
+    name = "Handle upload process",
+    skip(multipart, storage_details, uploaded_file_paths)
+)]
+async fn handle_upload_process(
     mut multipart: Multipart,
     storage_details: Extension<Arc<StorageDetails>>,
+    uploaded_file_paths: &mut Vec<String>,
 ) -> Result<(), UploadError> {
     if let Some(path_field) = get_multipart_field(&mut multipart).await? {
         if path_field.name().context("No field name")? != "relative_path" {
@@ -55,6 +83,7 @@ pub async fn upload(
             validate_file_name(file_name).map_err(UploadError::ValidationError)?;
 
             let file_path = format!("{}/{}", base_path, file_name);
+            uploaded_file_paths.push(file_path.clone());
             stream_to_file(&file_path, field)
                 .await
                 .context("Failed to save file")?;
@@ -97,4 +126,12 @@ async fn get_multipart_field<'a>(
         Ok(field) => Ok(field),
         Err(err) => Err(UploadError::UnexpectedError(err.into())),
     }
+}
+
+async fn cleanup_failed_files(uploaded_file_paths: &[String]) -> Result<(), io::Error> {
+    for file_path in uploaded_file_paths {
+        tokio::fs::remove_file(file_path).await?;
+    }
+
+    Ok(())
 }
