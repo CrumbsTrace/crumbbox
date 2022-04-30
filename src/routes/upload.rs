@@ -1,13 +1,17 @@
 use anyhow::Context;
 use axum::{
-    body::Bytes, extract::Multipart, http::StatusCode, response::IntoResponse, BoxError, Extension,
+    body::Bytes,
+    extract::{multipart::Field, Multipart},
+    http::StatusCode,
+    response::IntoResponse,
+    BoxError, Extension,
 };
 use futures::{Stream, TryStreamExt};
-use std::io;
+use std::{io, sync::Arc};
 use tokio::{fs::File, io::BufWriter};
 use tokio_util::io::StreamReader;
 
-use crate::validators::validate_file_name;
+use crate::{domain::StorageDetails, validators::validate_file_name};
 
 #[derive(thiserror::Error, Debug)]
 pub enum UploadError {
@@ -29,32 +33,39 @@ impl IntoResponse for UploadError {
     }
 }
 
-#[tracing::instrument(name = "Upload multipart form", skip(multipart))]
+#[tracing::instrument(name = "Upload multipart form", skip(multipart, storage_details))]
 pub async fn upload(
     mut multipart: Multipart,
-    Extension(storage_path): Extension<String>,
+    storage_details: Extension<Arc<StorageDetails>>,
 ) -> Result<(), UploadError> {
-    tracing::info!("Received multipart form upload request");
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .context("Failed to read multipart field")?
-    {
-        let file_name = if let Some(file_name) = field.file_name() {
-            file_name.to_owned()
-        } else {
-            continue;
+    if let Some(path_field) = get_multipart_field(&mut multipart).await? {
+        if path_field.name().context("No field name")? != "relative_path" {
+            return Err(UploadError::ValidationError(
+                "Expected field name 'relative_path'".to_string(),
+            ));
         };
 
-        validate_file_name(&file_name).map_err(UploadError::ValidationError)?;
+        let relative_path = path_field.text().await.context("Failed to get text")?;
+        let base_path = format!("{}/{}", storage_details.path, relative_path);
+        let mut uploaded_files = false;
 
-        let file_path = format!("{}/{}", storage_path, file_name);
-        tracing::info!("Saving file to: {}", file_path);
-        stream_to_file(&file_path, field)
-            .await
-            .context("Failed to save file")?;
+        while let Some(field) = get_multipart_field(&mut multipart).await? {
+            uploaded_files = true;
+            let file_name = field.file_name().context("Failed to get file name")?;
+            validate_file_name(file_name).map_err(UploadError::ValidationError)?;
+
+            let file_path = format!("{}/{}", base_path, file_name);
+            stream_to_file(&file_path, field)
+                .await
+                .context("Failed to save file")?;
+        }
+
+        if !uploaded_files {
+            return Err(UploadError::ValidationError(
+                "No files were in the multipart form".to_string(),
+            ));
+        }
     }
-
     Ok(())
 }
 
@@ -75,4 +86,15 @@ where
     tokio::io::copy(&mut body_reader, &mut file).await?;
 
     Ok(())
+}
+
+//This clippy lint is currently disabled here due to a bug https://github.com/rust-lang/rust-clippy/issues/5787
+#[allow(clippy::needless_lifetimes)]
+async fn get_multipart_field<'a>(
+    multipart: &'a mut Multipart,
+) -> Result<Option<Field<'a>>, UploadError> {
+    match multipart.next_field().await {
+        Ok(field) => Ok(field),
+        Err(err) => Err(UploadError::UnexpectedError(err.into())),
+    }
 }

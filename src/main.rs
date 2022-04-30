@@ -1,5 +1,6 @@
 use crumbbox::{
     configuration::Settings,
+    domain::StorageDetails,
     startup::app,
     telemetry::{get_subscriber, init_subscriber},
 };
@@ -20,5 +21,8 @@ async fn main() {
 
     tracing::info!("Listening on {}", listener.local_addr().unwrap());
 
-    app(listener, config.application.storage_path).await;
+    let storage_details = StorageDetails {
+        path: config.application.storage_path,
+    };
+    app(listener, storage_details).await;
 }

@@ -1,6 +1,9 @@
-use std::{net::TcpListener, time::Duration};
+use std::{net::TcpListener, sync::Arc, time::Duration};
 
-use crate::routes::{health_check, upload};
+use crate::{
+    domain::StorageDetails,
+    routes::{health_check, upload},
+};
 use axum::{
     body::BoxBody,
     response::Response,
@@ -12,11 +15,11 @@ use tower_http::{classify::ServerErrorsFailureClass, trace::TraceLayer};
 use tracing::Span;
 use uuid::Uuid;
 
-pub async fn app(listener: TcpListener, storage_path: String) {
+pub async fn app(listener: TcpListener, storage_details: StorageDetails) {
     let router = Router::new()
         .route("/health_check", get(health_check))
         .route("/upload", post(upload))
-        .layer(Extension(storage_path));
+        .layer(Extension(Arc::new(storage_details)));
 
     let router = add_tracing_middleware(router);
 

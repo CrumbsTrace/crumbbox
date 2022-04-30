@@ -1,5 +1,6 @@
 use crumbbox::{
     configuration::Settings,
+    domain::StorageDetails,
     startup::app,
     telemetry::{get_subscriber, init_subscriber},
 };
@@ -46,8 +47,11 @@ pub async fn spawn_app() -> TestApp {
     )
     .unwrap();
     let address = listener.local_addr().unwrap();
+    let storage_details = StorageDetails {
+        path: config.application.storage_path.clone(),
+    };
 
-    let _ = tokio::spawn(app(listener, config.application.storage_path.clone()));
+    let _ = tokio::spawn(app(listener, storage_details));
 
     TestApp {
         address,
