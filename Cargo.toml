@@ -26,6 +26,8 @@ hyper = { version = "0.14", features = ["full"] }
 reqwest = { version = "0.11", features = ["multipart"] }
 config = "0.13"
 uuid = { version = "1", features = ["v4"] }
+thiserror = "1"
+anyhow = "1"
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }
